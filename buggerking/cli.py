@@ -1,5 +1,7 @@
 import argparse
 from .init import init
+from .build import build
+from .deploy import deploy
 
 def main():
     parser = argparse.ArgumentParser(prog='buggerking')
@@ -12,3 +14,7 @@ def main():
     
     if args.command == 'init':
        init.init()
+    elif args.command == 'build':
+        build.build()
+    elif args.command == 'deploy':
+        deploy.deploy()
