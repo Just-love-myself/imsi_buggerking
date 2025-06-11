@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup (
     name='buggerking',
-    version='0.1.18',
+    version='0.1.19',
     description='test buggerking package',
     author='DogyunHyunseoKyeongyeon',
     author_email='hyunseo0412@naver.com',
@@ -18,6 +18,7 @@ setup (
         "requests",
         "click>=8.0",
         "colorama",
+        "psutil",
     ],
     entry_points={
         'console_scripts': [
