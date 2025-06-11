@@ -1603,7 +1603,7 @@ def send_file_to_local(file_path):
         try:
             sock.settimeout(15.0)  # 15초 타임아웃 (더 여유있게)
             print(f"📤 [FILE-SEND] 연결 시도...")
-            sock.connect(("165.194.27.213", 6689))
+            sock.connect(("165.194.27.222", 6689))
             print(f"📤 [FILE-SEND] 연결 성공!")
             
             # DAP 방식으로 전송
@@ -1970,7 +1970,7 @@ def create_empty_session_data(thread_id):
     }
 
 def extract_frame_info_improved(py_db, thread_id, variables_reference):
-    """프레임 정보 추출 (람다 환경 최적화)"""
+    """프레임 정보 추출 (람다 환경 최적화) - 객체 변경 시 라인 정보 보강"""
     try:
         print(f"[LAMBDA-DEBUG] Extracting frame info for {variables_reference}")
         
@@ -1982,7 +1982,6 @@ def extract_frame_info_improved(py_db, thread_id, variables_reference):
                 lineno = frame.f_lineno
                 function_name = frame.f_code.co_name
                 
-                # 코드 확인
                 try:
                     import linecache
                     line_text = linecache.getline(filename, lineno)
@@ -1990,25 +1989,44 @@ def extract_frame_info_improved(py_db, thread_id, variables_reference):
                 except Exception:
                     code = "# Code extraction failed"
                 
+                print(f"[LAMBDA-DEBUG] ✅ Method 1 success: {filename}:{lineno}")
                 return {
                     "frame_id": variables_reference,
                     "file": os.path.basename(filename),
                     "full_file": filename,
                     "line": lineno,
                     "function": function_name,
-                    "code": code
+                    "code": code,
+                    "extraction_method": "find_frame"
                 }
         except Exception as e:
             print(f"[LAMBDA-DEBUG] find_frame failed: {e}")
         
-        # 방법 2: frames_list 직접 접근
+        # 방법 2: frames_list 직접 접근 (🔧 FramesList 객체 처리 개선)
         try:
             actual_thread_id = py_db.suspended_frames_manager.get_thread_id_for_variable_reference(variables_reference)
             if actual_thread_id and hasattr(py_db.suspended_frames_manager, 'get_frames_list'):
                 frames_list = py_db.suspended_frames_manager.get_frames_list(actual_thread_id)
                 
                 if frames_list:
-                    for frame_data in frames_list[:3]:  # 처음 3개만
+                    print(f"[LAMBDA-DEBUG] frames_list type: {type(frames_list)}")
+                    
+                    # 🔧 FramesList 객체 처리 개선
+                    frames_to_check = []
+                    if hasattr(frames_list, '__iter__'):
+                        # 반복 가능한 객체인 경우
+                        try:
+                            frames_to_check = list(frames_list)[:3]
+                        except Exception:
+                            # 리스트 변환 실패 시 직접 반복
+                            count = 0
+                            for frame_data in frames_list:
+                                frames_to_check.append(frame_data)
+                                count += 1
+                                if count >= 3:
+                                    break
+                    
+                    for frame_data in frames_to_check:
                         try:
                             if isinstance(frame_data, (tuple, list)) and len(frame_data) >= 6:
                                 f_id, frame_obj, method_name, original_filename, filename_in_utf8, lineno = frame_data[:6]
@@ -2028,37 +2046,323 @@ def extract_frame_info_improved(py_db, thread_id, variables_reference):
                                     line_text = linecache.getline(current_filename, current_lineno)
                                     code = line_text.strip() if line_text else "# Code not available"
                                     
+                                    print(f"[LAMBDA-DEBUG] ✅ Method 2 success: {current_filename}:{current_lineno}")
                                     return {
                                         "frame_id": variables_reference,
                                         "file": os.path.basename(current_filename),
                                         "full_file": current_filename,
                                         "line": current_lineno,
                                         "function": current_function,
-                                        "code": code
+                                        "code": code,
+                                        "extraction_method": "frames_list"
                                     }
                         except Exception:
                             continue
         except Exception as e:
             print(f"[LAMBDA-DEBUG] frames_list failed: {e}")
         
-        # 기본 반환값
+        # 🚀 방법 2.5: 객체 변수의 경우 부모 프레임 정보 활용
+        try:
+            if is_object_variable(py_db, variables_reference, thread_id):
+                print(f"[LAMBDA-DEBUG] Attempting method 2.5: parent frame lookup...")
+                
+                # 부모 프레임 정보 찾기
+                parent_frame_info = None
+                try:
+                    # 같은 스레드의 다른 프레임들 확인
+                    actual_thread_id = py_db.suspended_frames_manager.get_thread_id_for_variable_reference(variables_reference)
+                    if actual_thread_id:
+                        # 최근에 성공한 프레임 정보 재사용
+                        frames_list = py_db.suspended_frames_manager.get_frames_list(actual_thread_id)
+                        if frames_list:
+                            frames_to_check = []
+                            if hasattr(frames_list, '__iter__'):
+                                try:
+                                    frames_to_check = list(frames_list)
+                                except Exception:
+                                    count = 0
+                                    for frame_data in frames_list:
+                                        frames_to_check.append(frame_data)
+                                        count += 1
+                                        if count >= 5:  # 더 많은 프레임 확인
+                                            break
+                            
+                            for frame_data in frames_to_check:
+                                try:
+                                    if isinstance(frame_data, (tuple, list)) and len(frame_data) >= 6:
+                                        f_id, frame_obj, method_name, original_filename, filename_in_utf8, lineno = frame_data[:6]
+                                        
+                                        # 유효한 프레임 정보가 있는 경우
+                                        if (hasattr(frame_obj, 'f_lineno') and 
+                                            original_filename and 
+                                            original_filename.endswith('.py') and
+                                            not any(pattern in original_filename.lower() for pattern in 
+                                                   ['pydevd', 'debugpy', '_pydev', 'site-packages'])):
+                                            
+                                            parent_frame_info = {
+                                                "filename": frame_obj.f_code.co_filename,
+                                                "lineno": frame_obj.f_lineno,
+                                                "function": frame_obj.f_code.co_name
+                                            }
+                                            break
+                                except Exception:
+                                    continue
+                except Exception:
+                    pass
+                
+                if parent_frame_info:
+                    import linecache
+                    line_text = linecache.getline(parent_frame_info["filename"], parent_frame_info["lineno"])
+                    code = line_text.strip() if line_text else "# Code not available"
+                    
+                    print(f"[LAMBDA-DEBUG] ✅ Method 2.5 success: {parent_frame_info['filename']}:{parent_frame_info['lineno']}")
+                    return {
+                        "frame_id": variables_reference,
+                        "file": os.path.basename(parent_frame_info["filename"]),
+                        "full_file": parent_frame_info["filename"],
+                        "line": parent_frame_info["lineno"],
+                        "function": parent_frame_info["function"],
+                        "code": code,
+                        "extraction_method": "parent_frame_lookup"
+                    }
+            else:
+                print(f"[LAMBDA-DEBUG] Not an object variable, skipping parent frame lookup")
+        except Exception as e:
+            print(f"[LAMBDA-DEBUG] Method 2.5 failed: {e}")
+        
+        # 🚀 방법 3: 현재 실행 중인 스레드의 frame 추적
+        try:
+            print(f"[LAMBDA-DEBUG] Attempting method 3: current thread frame tracking...")
+            
+            # 현재 실행 중인 모든 프레임 탐색
+            import sys
+            import threading
+            
+            current_tid = threading.current_thread().ident
+            current_frames = sys._current_frames()
+            
+            # 현재 스레드의 프레임 스택 순회
+            frame = current_frames.get(current_tid)
+            frame_depth = 0
+            
+            while frame and frame_depth < 10:  # 최대 10개 프레임까지 탐색
+                try:
+                    filename = frame.f_code.co_filename
+                    lineno = frame.f_lineno
+                    function_name = frame.f_code.co_name
+                    
+                    # 사용자 코드 필터링 (디버거 코드 제외)
+                    if not any(pattern in filename.lower() for pattern in 
+                              ['pydevd', 'debugpy', '_pydev', 'site-packages']):
+                        
+                        # .py 파일이고 유효한 라인 번호를 가진 경우
+                        if filename.endswith('.py') and lineno > 0:
+                            
+                            import linecache
+                            line_text = linecache.getline(filename, lineno)
+                            code = line_text.strip() if line_text else "# Code not available"
+                            
+                            print(f"[LAMBDA-DEBUG] ✅ Method 3 success! Found user frame:")
+                            print(f"[LAMBDA-DEBUG]   File: {filename}")
+                            print(f"[LAMBDA-DEBUG]   Line: {lineno}")
+                            print(f"[LAMBDA-DEBUG]   Function: {function_name}")
+                            print(f"[LAMBDA-DEBUG]   Code: {code[:50]}...")
+                            
+                            return {
+                                "frame_id": variables_reference,
+                                "file": os.path.basename(filename),
+                                "full_file": filename,
+                                "line": lineno,
+                                "function": function_name,
+                                "code": code,
+                                "extraction_method": "current_thread_frame_tracking"
+                            }
+                    
+                    frame = frame.f_back
+                    frame_depth += 1
+                    
+                except Exception as frame_error:
+                    print(f"[LAMBDA-DEBUG] Frame processing error: {frame_error}")
+                    frame = frame.f_back
+                    frame_depth += 1
+                    continue
+            
+            print(f"[LAMBDA-DEBUG] Method 3: No valid user frame found in {frame_depth} frames")
+            
+        except Exception as e:
+            print(f"[LAMBDA-DEBUG] Method 3 failed: {e}")
+        
+        # 🚀 방법 4: traceback 기반 정보 추출 (최후 수단)
+        try:
+            print(f"[LAMBDA-DEBUG] Attempting method 4: traceback-based extraction...")
+            
+            import traceback
+            import threading
+            
+            current_tid = threading.current_thread().ident
+            current_frames = sys._current_frames()
+            frame = current_frames.get(current_tid)
+            
+            if frame:
+                # traceback.format_stack으로 스택 정보 추출
+                stack = traceback.format_stack(frame)
+                
+                # 스택에서 사용자 코드 찾기
+                for entry in reversed(stack[-5:]):  # 최근 5개 엔트리만 확인
+                    try:
+                        lines = entry.strip().split('\n')
+                        if len(lines) >= 2:
+                            location_line = lines[0].strip()
+                            code_line = lines[1].strip()
+                            
+                            # 파일 정보 파싱
+                            if '"' in location_line and 'line ' in location_line:
+                                parts = location_line.split(', ')
+                                if len(parts) >= 3:
+                                    # 파일 경로 추출
+                                    file_part = parts[0].strip()
+                                    if '"' in file_part:
+                                        filename = file_part.split('"')[1]
+                                        
+                                        # 사용자 코드 필터링
+                                        if (filename.endswith('.py') and 
+                                            not any(pattern in filename.lower() for pattern in 
+                                                   ['pydevd', 'debugpy', '_pydev', 'site-packages'])):
+                                            
+                                            # 라인 번호 추출
+                                            line_part = parts[1].strip()
+                                            if 'line ' in line_part:
+                                                try:
+                                                    lineno = int(line_part.replace('line ', ''))
+                                                except ValueError:
+                                                    continue
+                                            
+                                            # 함수명 추출
+                                            func_part = parts[2].strip()
+                                            if 'in ' in func_part:
+                                                function_name = func_part.replace('in ', '')
+                                            else:
+                                                function_name = "unknown"
+                                            
+                                            print(f"[LAMBDA-DEBUG] ✅ Method 4 success! Found from traceback:")
+                                            print(f"[LAMBDA-DEBUG]   File: {filename}")
+                                            print(f"[LAMBDA-DEBUG]   Line: {lineno}")
+                                            print(f"[LAMBDA-DEBUG]   Function: {function_name}")
+                                            print(f"[LAMBDA-DEBUG]   Code: {code_line}")
+                                            
+                                            return {
+                                                "frame_id": variables_reference,
+                                                "file": os.path.basename(filename),
+                                                "full_file": filename,
+                                                "line": lineno,
+                                                "function": function_name,
+                                                "code": code_line,
+                                                "extraction_method": "traceback_based"
+                                            }
+                    except Exception as parse_error:
+                        print(f"[LAMBDA-DEBUG] Traceback parsing error: {parse_error}")
+                        continue
+            
+            print(f"[LAMBDA-DEBUG] Method 4: No valid traceback entry found")
+            
+        except Exception as e:
+            print(f"[LAMBDA-DEBUG] Method 4 failed: {e}")
+        
+        
+        ############## 그냥 무조건 -1로
+        # 🚀 개선된 기본 반환값 (최소한 .py 확장자는 보장)
+        print(f"[LAMBDA-DEBUG] All methods failed, using enhanced fallback...")
+        
+        # 현재 실행 중인 파일 정보라도 가져오기 시도
+        fallback_file = "lambda_function.py"  # ✅ .py 확장자 추가
+        fallback_line = -1
+        fallback_function = "lambda_handler"
+        
+        try:
+            # 현재 스택에서 첫 번째 사용자 파일이라도 찾기
+            import sys
+            import threading
+            current_frames = sys._current_frames()
+            frame = current_frames.get(threading.current_thread().ident)
+            
+            while frame:
+                filename = frame.f_code.co_filename
+                if (filename.endswith('.py') and 
+                    not any(pattern in filename.lower() for pattern in 
+                           ['pydevd', 'debugpy', '_pydev', 'site-packages'])):
+                    fallback_file = os.path.basename(filename)
+                    fallback_line = -1
+                    fallback_function = frame.f_code.co_name
+                    print(f"[LAMBDA-DEBUG] Enhanced fallback found: {fallback_file}:{fallback_line}")
+                    break
+                frame = frame.f_back
+        except Exception as fallback_error:
+            print(f"[LAMBDA-DEBUG] Enhanced fallback failed: {fallback_error}")
+        
         return {
             "frame_id": variables_reference,
-            "file": "lambda_function",
-            "line": -1,
-            "function": "lambda_handler",
-            "code": "# Frame info extraction failed"
+            "file": fallback_file,  # ✅ .py 확장자 포함
+            "full_file": f"/tmp/{fallback_file}",
+            "line": fallback_line,  # ✅ jump to 가능한 라인
+            "function": fallback_function,
+            "code": "# Frame info extraction failed - using enhanced fallback",
+            "extraction_method": "enhanced_fallback"
         }
         
     except Exception as e:
         print(f"[LAMBDA-DEBUG] Critical error: {e}")
         return {
             "frame_id": variables_reference,
-            "file": "error",
-            "line": -1,
+            "file": "lambda_function.py",  # ✅ .py 확장자 보장
+            "full_file": "/tmp/lambda_function.py",
+            "line": -1,  # 
             "function": "unknown",
-            "code": f"# Critical error: {str(e)}"
+            "code": f"# Critical error: {str(e)}",
+            "extraction_method": "error_fallback"
         }
+
+    
+def is_object_variable(py_db, variables_reference, thread_id):
+    """객체 변수인지 정확히 판별하는 함수"""
+    try:
+        # 1. 기본 조건: variables_reference가 thread_id와 다름
+        if variables_reference == thread_id:
+            return False
+        
+        # 2. Variable 타입 확인
+        variable = py_db.suspended_frames_manager.get_variable(variables_reference)
+        variable_type = type(variable).__name__
+        
+        if variable_type == "_ObjectVariable":
+            return True
+        elif variable_type == "_FrameVariable":
+            return False
+        
+        # 3. Frame 추출 가능 여부로 판별
+        frame = py_db.find_frame(thread_id, variables_reference)
+        if frame is not None:
+            # frame을 직접 찾을 수 있다면 Frame variable
+            return False
+        
+        # 4. frames_list에서 frame_id로 존재하는지 확인
+        actual_thread_id = py_db.suspended_frames_manager.get_thread_id_for_variable_reference(variables_reference)
+        if actual_thread_id:
+            frames_list = py_db.suspended_frames_manager.get_frames_list(actual_thread_id)
+            if frames_list:
+                for frame_data in frames_list:
+                    if isinstance(frame_data, (tuple, list)) and len(frame_data) >= 1:
+                        f_id = frame_data[0]
+                        if f_id == variables_reference:
+                            # frames_list에 직접 존재한다면 Frame variable
+                            return False
+        
+        # 5. 위 조건들을 통과했다면 Object variable일 가능성이 높음
+        return True
+        
+    except Exception as e:
+        print(f"[DEBUG] Error determining variable type: {e}")
+        # 에러 시 안전하게 False 반환
+        return False
 
 # def collect_recursive_children(py_db, var_data, current_depth=0, processed_refs=None, parent_type=None):
 #     """

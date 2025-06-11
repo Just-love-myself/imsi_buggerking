@@ -638,127 +638,6 @@ def _decode_message_data(message_type, body_bytes):
         print(f"❌ [DAP-RECV] 데이터 변환 실패: {e}")
         return None
 
-def request_previous_state(reinvoked=False):
-    """개발자 PC에서 이전 디버깅 상태 요청 - DAP 방식"""
-    print("🔄 [REQUEST-STATE] 이전 디버깅 상태 요청 시작...")
-    if reinvoked:
-        print("🔁 [REQUEST-STATE] 재호출로 인한 상태 복구 시도")
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(10.0)  # 10초 타임아웃
-            
-            print("🔄 [REQUEST-STATE] 개발자 PC에 연결 중... (165.194.27.213:6689)")
-            sock.connect(("165.194.27.213", 6689))
-            print("✅ [REQUEST-STATE] 연결 성공!")
-            
-            # DAP 방식으로 응답 수신
-            response_data = receive_dap_message(sock)
-            
-            sock.close()
-            
-            if response_data:
-                print(f"🎉 [REQUEST-STATE] 총 {len(response_data)} bytes 수신 완료!")
-                
-                try:
-                    response_json = std_json.loads(response_data.decode('utf-8'))
-                    print("✅ [REQUEST-STATE] JSON 파싱 성공!")
-                    
-                    # 📊 받은 JSON 내용 상세 로깅
-                    print("=" * 80)
-                    print("📋 [RECEIVED-JSON] 수신된 JSON 파일 내용:")
-                    print("=" * 80)
-                    
-                    # JSON 구조 분석
-                    if isinstance(response_json, dict):
-                        print(f"📁 [JSON-STRUCTURE] 최상위 키들: {list(response_json.keys())}")
-                        
-                        # has_state 확인
-                        if "has_state" in response_json:
-                            has_state = response_json["has_state"]
-                            print(f"🔍 [JSON-CONTENT] has_state: {has_state}")
-                            
-                            if has_state:
-                                print("✅ [JSON-CONTENT] 복구할 상태 데이터 있음!")
-                                
-                                # state 데이터 상세 분석
-                                if "state" in response_json:
-                                    state_data = response_json["state"]
-                                    print(f"📊 [STATE-DATA] state 타입: {type(state_data)}")
-                                    
-                                    if isinstance(state_data, dict):
-                                        print(f"📊 [STATE-DATA] state 키들: {list(state_data.keys())}")
-                                        
-                                        # callstacks 분석
-                                        if "callstacks" in state_data:
-                                            callstacks = state_data["callstacks"]
-                                            print(f"📊 [CALLSTACKS] callstacks 개수: {len(callstacks)}")
-                                            
-                                            for i, frame in enumerate(callstacks):
-                                                print(f"📊 [FRAME-{i}] frame_id: {frame.get('frame_id', 'unknown')}")
-                                                print(f"📊 [FRAME-{i}] function: {frame.get('function', 'unknown')}")
-                                                print(f"📊 [FRAME-{i}] file: {frame.get('file', 'unknown')}")
-                                                print(f"📊 [FRAME-{i}] line: {frame.get('line', 'unknown')}")
-                                                
-                                                # 변수 개수 확인
-                                                variables = frame.get('variables', {})
-                                                locals_count = len(variables.get('locals', []))
-                                                globals_count = len(variables.get('globals', []))
-                                                
-                                                print(f"📊 [FRAME-{i}] locals 변수 개수: {locals_count}")
-                                                print(f"📊 [FRAME-{i}] globals 변수 개수: {globals_count}")
-                                                
-                                                # 첫 번째 프레임의 변수 몇 개 샘플 출력
-                                                if i == 0 and locals_count > 0:
-                                                    print(f"📋 [FRAME-{i}] locals 샘플:")
-                                                    for j, var in enumerate(variables['locals'][:3]):  # 처음 3개만
-                                                        var_name = var.get('name', 'unknown')
-                                                        var_value = str(var.get('value', ''))[:50]  # 처음 50자만
-                                                        var_type = var.get('type', 'unknown')
-                                                        print(f"📋 [FRAME-{i}]   {j+1}. {var_name} = {var_value}... ({var_type})")
-                                                
-                                                print("-" * 40)
-                                        
-                                        # 메타데이터 출력
-                                        if "summary" in state_data:
-                                            summary = state_data["summary"]
-                                            print(f"📊 [SUMMARY] {summary}")
-                                            
-                                # 복구 소스 파일 정보
-                                if "restored_from" in response_json:
-                                    restored_from = response_json["restored_from"]
-                                    print(f"📁 [SOURCE-FILE] 복구 소스: {restored_from}")
-                                    
-                            else:
-                                print("❌ [JSON-CONTENT] 복구할 상태 없음")
-                                if "message" in response_json:
-                                    print(f"📝 [MESSAGE] {response_json['message']}")
-                        
-                        # 전체 JSON 크기 정보
-                        json_str = json.dumps(response_json, indent=2)
-                        print(f"📏 [JSON-SIZE] 전체 JSON 크기: {len(json_str)} 문자")
-                        print(f"📏 [JSON-SIZE] 전체 JSON 라인 수: {len(json_str.splitlines())}")
-                        
-                    else:
-                        print(f"⚠️ [JSON-TYPE] 예상과 다른 JSON 타입: {type(response_json)}")
-                        print(f"📋 [JSON-CONTENT] 내용: {str(response_json)[:200]}...")
-                    
-                    print("=" * 80)
-                    return True
-                    
-                except json.JSONDecodeError as e:
-                    print(f"❌ [REQUEST-STATE] JSON 파싱 실패: {e}")
-                    print(f"📋 [RAW-DATA] 받은 데이터 (처음 500자): {response_data[:500]}")
-                    return False
-            else:
-                print("❌ [REQUEST-STATE] 응답 데이터 없음")
-                return False
-                    
-        except Exception as e:
-            print(f"❌ [REQUEST-STATE] 전체 요청 실패: {e}")
-            import traceback
-            print(f"❌ [REQUEST-STATE] 상세 오류: {traceback.format_exc()}")
-            return False
-        
 
 class wait_for_client:
     def __call__(self, exception=None, context=None, restart=False):
@@ -790,7 +669,7 @@ class wait_for_client:
             try:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.settimeout(30.0)  # 30초 타임아웃 설정
-                sock.connect(("165.194.27.213", 6689))  # 개발자 PC IP + 수신 포트
+                sock.connect(("165.194.27.222", 6689))  # 개발자 PC IP + 수신 포트
                 # 1) remaining_ms 전송 (DAP 방식)
                 timeout_data = {"remaining_ms": remaining}
                 success = send_dap_message(sock, timeout_data, 'TIME')
@@ -860,8 +739,10 @@ class wait_for_client:
                     # with io.BytesIO(json_data) as f:
                     #     data = std_json.load(f)
                        
-                    capture_callstacks = json_data.get("callstacks", [])
-                    
+                    received_callstacks = json_data.get("callstacks", [])
+
+                    # 원치않은 call stack 프레임 제거
+                    capture_callstacks = [frame for frame in received_callstacks if frame.get("line") != -1]                    
                     
                     for i in range(len(capture_callstacks)):
                         function_name = capture_callstacks[i].get("function", "unknown_function")

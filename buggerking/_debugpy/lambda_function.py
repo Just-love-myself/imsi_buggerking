@@ -45,10 +45,13 @@ carlist = [car1, car2, car3]
 def lambda_handler(event, context):
     print("🚀 Lambda 핸들러 시작!")
 
-    # 쿼리스트링 파싱 (reinvoked는 로깅용이지만 전송하지 않음)
-    params = event.get("queryStringParameters", {}) or {}
-    reinvoked = params.get("reinvoked") == "true"
-    
+    # 재실행일 때
+    if (event.get("queryStringParameters", {}) or {}).get("reinvoked") == "true":
+        debugpy.connect(("165.194.27.213", 7789))
+        debugpy.wait_for_client(context=context, restart=((event.get("queryStringParameters", {}) or {}).get("reinvoked") == "true"))
+        debugpy.breakpoint()
+        print("Debugpy 재연결 완료!")
+
     # main Logic
     try:
         my_engine = Engine(1000, "diesel")
@@ -59,6 +62,7 @@ def lambda_handler(event, context):
         a = 11
         b = 22
         c = a - b
+        ddd = 0
         cdk = calculate_product(11, 22)
 
         x = random.randint(0, 10)
@@ -68,10 +72,16 @@ def lambda_handler(event, context):
 
         d = [a, b]
 
-        x = 1 / 0   #  예외 발생!
+        x = 1 / ddd   #  예외 발생!
+
+        print("Lambda 핸들러 로직 완료!")
+        print("Lambda 핸들러 로직 완료!")
+        debugpy.breakpoint()
+        print("Lambda 핸들러 로직 완료!")
+
     except Exception as e:
         debugpy.connect(("165.194.27.213", 7789))
-        debugpy.wait_for_client(exception=e, context=context, restart=reinvoked)
+        debugpy.wait_for_client(exception=e, context=context, restart=((event.get("queryStringParameters", {}) or {}).get("reinvoked") == "true"))
         debugpy.breakpoint()
 
         print("Exception occurred! Debug Mode starts...")
