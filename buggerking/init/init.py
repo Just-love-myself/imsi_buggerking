@@ -189,7 +189,7 @@ def _add_package_to_requirements(requirements_file_path: Path, package_name: str
         # Ensure the parent directory exists
         requirements_file_path.parent.mkdir(parents=True, exist_ok=True)
 
-        line_to_add = f"{package_name}\\n"
+        line_to_add = f"{package_name}\n"
         
         if requirements_file_path.is_file():
             with open(requirements_file_path, "r+", encoding="utf-8") as f:
@@ -199,8 +199,8 @@ def _add_package_to_requirements(requirements_file_path: Path, package_name: str
                 
                 if not package_exists:
                     # Ensure the file ends with a newline before appending
-                    if lines and not lines[-1].endswith('\\n'):
-                        f.write('\\n')
+                    if lines and not lines[-1].endswith('\n'):
+                        f.write('\n')
                     f.write(line_to_add)
                     print(f"✅ '{package_name}' 추가 완료: {requirements_file_path}")
                 else:
@@ -213,18 +213,6 @@ def _add_package_to_requirements(requirements_file_path: Path, package_name: str
 
     except Exception as e:
         print(f"❌ {requirements_file_path} 파일 수정 중 오류 발생: {e}")
-
-def _change_directory_to_sam_project(sam_project_path: Path, sam_project_dir_name: str):
-    """Changes the current working directory to the SAM project directory."""
-    if sam_project_path.is_dir():
-        try:
-            os.chdir(sam_project_path)
-            print(f"✅ 현재 디렉토리를 '{sam_project_path}'(으)로 변경했습니다.")
-        except Exception as e:
-            print(f"❌ '{sam_project_path}'(으)로 디렉토리 변경 중 오류 발생: {e}")
-    else:
-        print(f"⚠️ 자동 생성된 SAM 프로젝트 디렉토리 '{sam_project_dir_name}'를 찾을 수 없습니다. 현재 디렉토리를 변경하지 않습니다.")
-        print(f"   (예상 경로: '{sam_project_path}')")
 
 def add_firewall_rule(port: int):
     if platform.system() != "Windows":
@@ -268,7 +256,7 @@ def create_sam_template(project_name="buggerking_remote_debugger", auto_mode=Tru
             print(f"✅ SAM 프로젝트 자동 생성 완료")
 
             # template.yaml 수정 시작
-            template_file_path = Path.cwd() / "template.yaml"
+            template_file_path = Path.cwd() / project_name / "template.yaml"
             _modify_sam_template_yaml(template_file_path) # MODIFIED
             # template.yaml 수정 종료
             
@@ -276,11 +264,7 @@ def create_sam_template(project_name="buggerking_remote_debugger", auto_mode=Tru
             requirements_file_path = Path.cwd() / project_name / "hello_world" / "requirements.txt"
             _add_package_to_requirements(requirements_file_path, "buggerking")
             
-            # sam init 후 생성된 하위 디렉토리로 이동
-            sam_project_dir_name = project_name
-            current_working_dir = Path.cwd()
-            sam_project_path = current_working_dir / sam_project_dir_name
-            _change_directory_to_sam_project(sam_project_path, sam_project_dir_name) # MODIFIED
+            print(f"ℹ️ 터미널에서 다음 명령을 실행하여 디렉토리를 변경하세요: cd {sam_project_path}")
 
         except subprocess.CalledProcessError as e:
             print(f"❌ SAM 프로젝트 생성 실패: {e}")
