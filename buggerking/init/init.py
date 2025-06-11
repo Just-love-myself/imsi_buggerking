@@ -147,6 +147,85 @@ def create_tasks_json():
         f.write(tasks_json_content)
     print("✅ .vscode/tasks.json 생성 완료")
 
+def _modify_sam_template_yaml(template_file_path: Path):
+    """Modifies the SAM template.yaml file to include RequestParameters."""
+    if not template_file_path.is_file():
+        print(f"❌ template.yaml 파일을 찾을 수 없습니다: {template_file_path}")
+        return
+
+    try:
+        with open(template_file_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        new_lines = []
+        inserted = False
+        # 대상 라인 (정확한 문자열, 앞부분 공백 12칸)
+        target_line_content = "            Method: get"
+
+        for line in lines:
+            new_lines.append(line) # 현재 라인 추가
+            # 현재 라인(개행문자 제외)이 대상 라인인지 확인
+            if line.rstrip() == target_line_content:
+                if not inserted: # 첫 번째 일치하는 부분에만 삽입
+                    indent_base = "            " # 공백 12칸
+                    indent_param_item = "              " # 공백 14칸
+                    new_lines.append(f"{indent_base}RequestParameters:\n")
+                    new_lines.append(f"{indent_param_item}- method.request.querystring.reinvoked\n")
+                    inserted = True
+        
+        if inserted:
+            with open(template_file_path, "w", encoding="utf-8") as f:
+                f.writelines(new_lines)
+            print(f"✅ template.yaml 수정 완료: RequestParameters 추가")
+        else:
+            print(f"⚠️ template.yaml 수정 실패: '{target_line_content}' 라인을 찾지 못했습니다. 파일 내용을 확인해주세요.")
+    
+    except Exception as e:
+        print(f"❌ template.yaml 수정 중 오류 발생: {e}")
+
+def _add_package_to_requirements(requirements_file_path: Path, package_name: str):
+    """Appends a package to the requirements.txt file if not already present."""
+    try:
+        # Ensure the parent directory exists
+        requirements_file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        line_to_add = f"{package_name}\\n"
+        
+        if requirements_file_path.is_file():
+            with open(requirements_file_path, "r+", encoding="utf-8") as f:
+                lines = f.readlines()
+                # Check if package (with or without newline) is already in the file
+                package_exists = any(package_name == line.strip() for line in lines)
+                
+                if not package_exists:
+                    # Ensure the file ends with a newline before appending
+                    if lines and not lines[-1].endswith('\\n'):
+                        f.write('\\n')
+                    f.write(line_to_add)
+                    print(f"✅ '{package_name}' 추가 완료: {requirements_file_path}")
+                else:
+                    print(f"ℹ️ '{package_name}' 이미 존재함: {requirements_file_path}")
+        else:
+            # If requirements.txt doesn't exist, create it and add the package
+            with open(requirements_file_path, "w", encoding="utf-8") as f:
+                f.write(line_to_add)
+            print(f"✅ '{package_name}' 추가 완료 (requirements.txt 새로 생성): {requirements_file_path}")
+
+    except Exception as e:
+        print(f"❌ {requirements_file_path} 파일 수정 중 오류 발생: {e}")
+
+def _change_directory_to_sam_project(sam_project_path: Path, sam_project_dir_name: str):
+    """Changes the current working directory to the SAM project directory."""
+    if sam_project_path.is_dir():
+        try:
+            os.chdir(sam_project_path)
+            print(f"✅ 현재 디렉토리를 '{sam_project_path}'(으)로 변경했습니다.")
+        except Exception as e:
+            print(f"❌ '{sam_project_path}'(으)로 디렉토리 변경 중 오류 발생: {e}")
+    else:
+        print(f"⚠️ 자동 생성된 SAM 프로젝트 디렉토리 '{sam_project_dir_name}'를 찾을 수 없습니다. 현재 디렉토리를 변경하지 않습니다.")
+        print(f"   (예상 경로: '{sam_project_path}')")
+
 def add_firewall_rule(port: int):
     if platform.system() != "Windows":
         print("⚠️ 이 기능은 Windows에서만 동작합니다.")
@@ -189,58 +268,18 @@ def create_sam_template(project_name="buggerking_remote_debugger", auto_mode=Tru
 
             # template.yaml 수정 시작
             template_file_path = Path.cwd() / "template.yaml"
-            
-            if not template_file_path.is_file():
-                print(f"❌ template.yaml 파일을 찾을 수 없습니다: {template_file_path}")
-            else:
-                try:
-                    with open(template_file_path, "r", encoding="utf-8") as f:
-                        lines = f.readlines()
-
-                    new_lines = []
-                    inserted = False
-                    # 대상 라인 (정확한 문자열, 앞부분 공백 12칸)
-                    target_line_content = "            Method: get"
-
-                    for line in lines:
-                        new_lines.append(line) # 현재 라인 추가
-                        # 현재 라인(개행문자 제외)이 대상 라인인지 확인
-                        if line.rstrip() == target_line_content:
-                            if not inserted: # 첫 번째 일치하는 부분에만 삽입
-                                indent_base = "            " # 공백 12칸
-                                indent_param_item = "              " # 공백 14칸
-                                new_lines.append(f"{indent_base}RequestParameters:\\n")
-                                new_lines.append(f"{indent_param_item}- method.request.querystring.reinvoked\\n")
-                                inserted = True
-                    
-                    if inserted:
-                        with open(template_file_path, "w", encoding="utf-8") as f:
-                            f.writelines(new_lines)
-                        print(f"✅ template.yaml 수정 완료: RequestParameters 추가")
-                    else:
-                        print(f"⚠️ template.yaml 수정 실패: '{target_line_content}' 라인을 찾지 못했습니다. 파일 내용을 확인해주세요.")
-                
-                except Exception as e:
-                    print(f"❌ template.yaml 수정 중 오류 발생: {e}")
+            _modify_sam_template_yaml(template_file_path) # MODIFIED
             # template.yaml 수정 종료
-
-            # 'sam init' 기본 프로젝트 이름 (hello-world 템플릿 기준)
+            
+            # Path.cwd() / "hello_world" / requirements.txt 파일에 buggerking 패키지 추가
+            requirements_file_path = Path.cwd() / project_name / "hello_world" / "requirements.txt"
+            _add_package_to_requirements(requirements_file_path, "buggerking")
+            
+            # sam init 후 생성된 하위 디렉토리로 이동
             sam_project_dir_name = project_name
-            # create_sam_template 함수는 현재 작업 디렉토리(Path.cwd())에서 'sam init'을 실행합니다.
-            # template.yaml 수정 후에는 Path.cwd()가 sam-app 내부를 가리키므로, 부모 디렉토리를 기준으로 경로를 설정해야 합니다.
-            # 하지만 sam init 시 cwd=Path.cwd()로 지정했으므로, template.yaml 수정 후에도 Path.cwd()는 초기 실행 위치를 가리킵니다.
             current_working_dir = Path.cwd()
             sam_project_path = current_working_dir / sam_project_dir_name
-
-            if sam_project_path.is_dir():
-                try:
-                    os.chdir(sam_project_path)
-                    print(f"✅ 현재 디렉토리를 '{sam_project_path}'(으)로 변경했습니다.")
-                except Exception as e:
-                    print(f"❌ '{sam_project_path}'(으)로 디렉토리 변경 중 오류 발생: {e}")
-            else:
-                print(f"⚠️ 자동 생성된 SAM 프로젝트 디렉토리 '{sam_project_dir_name}'를 찾을 수 없습니다. 현재 디렉토리를 변경하지 않습니다.")
-                print(f"   (예상 경로: '{sam_project_path}')")
+            _change_directory_to_sam_project(sam_project_path, sam_project_dir_name) # MODIFIED
 
         except subprocess.CalledProcessError as e:
             print(f"❌ SAM 프로젝트 생성 실패: {e}")
