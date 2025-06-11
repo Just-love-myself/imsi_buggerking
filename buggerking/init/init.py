@@ -57,7 +57,7 @@ def create_launch_json(port: int):
       "type": "python",
       "request": "launch",
       "console": "integratedTerminal",
-      "code": ["import runpy", "runpy.run_path(r\\'${{file}}\\'')"],
+      "code": ["import runpy", "runpy.run_path(r\'${{file}}\'')"],
       "logToFile": true,
       "debugAdapterPath": "${{workspaceFolder}}/src/debugpy/adapter"
     }},

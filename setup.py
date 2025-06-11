@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup (
     name='buggerking',
-    version='0.1.20',
+    version='0.1.21',
     description='test buggerking package',
     author='DogyunHyunseoKyeongyeon',
     author_email='hyunseo0412@naver.com',
