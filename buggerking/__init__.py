@@ -1,8 +1,8 @@
 # from .core import debug
 # from .init import init -> 필요한가?
 
-import _debugpy as _dbg
-from _decorators import debug_decorator
+from ._debugpy.src import debugpy as _dbg
+from ._decorators import debug_decorator
         
 
 __all__ = _dbg.__all__  # debugpy에서 정의된 공개 API 목록 재사용
