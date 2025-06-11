@@ -1,6 +1,7 @@
 import json
 import subprocess
 import platform
+import os
 from pathlib import Path
 from ..common.common import get_sam_path
 
@@ -8,138 +9,142 @@ def create_launch_json(port: int):
     vscode_path = Path(".vscode")
     vscode_path.mkdir(exist_ok=True)
 
-    launch_config = \
-    {
-        "version": "0.2.0",
-        "configurations": [
-            {
-            "name": "Infinite Debug Loop",
-            "type": "debugpy",
-            "request": "attach",
-            "listen": {
-                "host": "0.0.0.0",
-                "port": 7789
-            },
-            "justMyCode": false,
-            "pathMappings": [
-                {
-                "localRoot": "${workspaceFolder}",
-                "remoteRoot": "/var/task"
-                }
-            ],
-            "restart": true,
-            "preLaunchTask": "Run Listener and Controller"
-            },
-            {
-            "name": "Launch: program",
-            "type": "python",
-            "request": "launch",
-            "console": "integratedTerminal",
-            "program": "${file}",
-            "logToFile": true,
-            "debugAdapterPath": "${workspaceFolder}/src/debugpy/adapter"
-            },
-            {
-            "name": "Launch: module",
-            "type": "python",
-            "request": "launch",
-            "console": "integratedTerminal",
-            "module": "${fileBasenameNoExtension}",
-            "cwd": "${fileDirname}",
-            "logToFile": true,
-            "debugAdapterPath": "${workspaceFolder}/src/debugpy/adapter"
-            },
-            {
-            "name": "Launch: code",
-            "type": "python",
-            "request": "launch",
-            "console": "integratedTerminal",
-            "code": ["import runpy", "runpy.run_path(r'${file}')"],
-            "logToFile": true,
-            "debugAdapterPath": "${workspaceFolder}/src/debugpy/adapter"
-            },
-            {
-            "name": "Attach: connect",
-            "type": "python",
-            "request": "attach",
-            "connect": {
-                "port": 5678,
-                "host": "127.0.0.1"
-            },
-            "logToFile": true,
-            "debugAdapterPath": "${workspaceFolder}/src/debugpy/adapter"
-            },
-            {
-            "name": "Attach: listen",
-            "type": "python",
-            "request": "attach",
-            "listen": {
-                "port": 5678,
-                "host": "127.0.0.1"
-            },
-            "logToFile": true,
-            "debugAdapterPath": "${workspaceFolder}/src/debugpy/adapter"
-            },
-            {
-            "name": "Attach: PID",
-            "type": "python",
-            "request": "attach",
-            "processId": "${command:pickProcess}",
-            "debugAdapterPath": "${workspaceFolder}/src/debugpy/adapter"
-            },
-            {
-            "name": "Debug Tests",
-            "type": "python",
-            "request": "launch",
-            "console": "integratedTerminal",
-            "purpose": ["debug-test"],
-            "debugAdapterPath": "${workspaceFolder}/src/debugpy/adapter"
-            }
-        ]
-    }
+    launch_json_content = f"""{{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {{
+      "name": "Infinite Debug Loop",
+      "type": "debugpy",
+      "request": "attach",
+      "listen": {{
+        "host": "0.0.0.0",
+        "port": {port}
+      }},
+      "justMyCode": false,
+      "pathMappings": [
+        {{
+          "localRoot": "${{workspaceFolder}}",
+          "remoteRoot": "/var/task"
+        }}
+      ],
+      "restart": true,
+      "preLaunchTask": "Run Listener and Controller"
+    }},
+    {{
+      "name": "Launch: program",
+      "type": "python",
+      "request": "launch",
+      "console": "integratedTerminal",
+      "program": "${{file}}",
+      "logToFile": true,
+      "debugAdapterPath": "${{workspaceFolder}}/src/debugpy/adapter"
+    }},
+    {{
+      "name": "Launch: module",
+      "type": "python",
+      "request": "launch",
+      "console": "integratedTerminal",
+      "module": "${{fileBasenameNoExtension}}",
+      "cwd": "${{fileDirname}}",
+      "logToFile": true,
+      "debugAdapterPath": "${{workspaceFolder}}/src/debugpy/adapter"
+    }},
+    {{
+      "name": "Launch: code",
+      "type": "python",
+      "request": "launch",
+      "console": "integratedTerminal",
+      "code": ["import runpy", "runpy.run_path(r\\'${{file}}\\'')"],
+      "logToFile": true,
+      "debugAdapterPath": "${{workspaceFolder}}/src/debugpy/adapter"
+    }},
+    {{
+      "name": "Attach: connect",
+      "type": "python",
+      "request": "attach",
+      "connect": {{
+        "port": 5678,
+        "host": "127.0.0.1"
+      }},
+      "logToFile": true,
+      "debugAdapterPath": "${{workspaceFolder}}/src/debugpy/adapter"
+    }},
+    {{
+      "name": "Attach: listen",
+      "type": "python",
+      "request": "attach",
+      "listen": {{
+        "port": 5678,
+        "host": "127.0.0.1"
+      }},
+      "logToFile": true,
+      //"restart": true,
+      "debugAdapterPath": "${{workspaceFolder}}/src/debugpy/adapter"
+    }},
+    {{
+      "name": "Attach: PID",
+      "type": "python",
+      "request": "attach",
+      "processId": "${{command:pickProcess}}",
+      "debugAdapterPath": "${{workspaceFolder}}/src/debugpy/adapter"
+    }},
+    {{
+      "name": "Debug Tests",
+      "type": "python",
+      "request": "launch",
+      "console": "integratedTerminal",
+      "purpose": ["debug-test"],
+      "debugAdapterPath": "${{workspaceFolder}}/src/debugpy/adapter"
+    }}
+  ]
+}}"""
 
-    with open(vscode_path / "launch.json", "w") as f:
-        json.dump(launch_config, f, indent=4)
+    file_path = vscode_path / "launch.json"
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(launch_json_content)
     print("✅ .vscode/launch.json 생성 완료")
 
 def create_tasks_json():
     vscode_path = Path(".vscode")
     vscode_path.mkdir(exist_ok=True)
 
-    tasks_config = \
-    {
-        "version": "2.0.0",
-        "tasks": [
-            {
+    tasks_json_content = f"""{{
+    "version": "2.0.0",
+    "tasks": [
+        {{
             "label": "Run Listener and Controller",
             "type": "shell",
             "command": "python",
             "args": ["loop_controller.py"],
             "isBackground": true,
-            "problemMatcher": {
+            "problemMatcher": {{
                 "owner": "custom",
                 "pattern": [
-                {
-                    "regexp": "^listener\\.py:1:1:.*$",
-                    "file": 1,
-                    "line": 1,
-                    "column": 1,
-                    "message": 0
-                }
+                    {{
+                        "regexp": "^listener\\\\\\\\.py:1:1:.*$",
+                        "file": 1,
+                        "line": 1,
+                        "column": 1,
+                        "message": 0
+                    }}
                 ],
-                "background": {
-                "activeOnStart": true,
-                "beginsPattern": "listener.py:1:1: 디버깅 대기 중",
-                "endsPattern": "디버깅 준비 완료"
-                }
-            },
-            "presentation": { "reveal": "always", "panel": "shared" }
-            }
-        ]
-    }
+                "background": {{
+                    "activeOnStart": true,
+                    "beginsPattern": "listener.py:1:1: 디버깅 대기 중",
+                    "endsPattern": "디버깅 준비 완료"
+                }}
+            }},
+            "presentation": {{ "reveal": "always", "panel": "shared" }}
+        }}
+    ]
+}}"""
 
-    with open(vscode_path / "tasks.json", "w") as f:
-        json.dump(tasks_config, f, indent=4)
+    file_path = vscode_path / "tasks.json"
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(tasks_json_content)
     print("✅ .vscode/tasks.json 생성 완료")
 
 def add_firewall_rule(port: int):
@@ -219,6 +224,24 @@ def create_sam_template(project_name="buggerking_remote_debugger", auto_mode=Tru
                     print(f"❌ template.yaml 수정 중 오류 발생: {e}")
             # template.yaml 수정 종료
 
+            # 'sam init' 기본 프로젝트 이름 (hello-world 템플릿 기준)
+            sam_project_dir_name = project_name
+            # create_sam_template 함수는 현재 작업 디렉토리(Path.cwd())에서 'sam init'을 실행합니다.
+            # template.yaml 수정 후에는 Path.cwd()가 sam-app 내부를 가리키므로, 부모 디렉토리를 기준으로 경로를 설정해야 합니다.
+            # 하지만 sam init 시 cwd=Path.cwd()로 지정했으므로, template.yaml 수정 후에도 Path.cwd()는 초기 실행 위치를 가리킵니다.
+            current_working_dir = Path.cwd()
+            sam_project_path = current_working_dir / sam_project_dir_name
+
+            if sam_project_path.is_dir():
+                try:
+                    os.chdir(sam_project_path)
+                    print(f"✅ 현재 디렉토리를 '{sam_project_path}'(으)로 변경했습니다.")
+                except Exception as e:
+                    print(f"❌ '{sam_project_path}'(으)로 디렉토리 변경 중 오류 발생: {e}")
+            else:
+                print(f"⚠️ 자동 생성된 SAM 프로젝트 디렉토리 '{sam_project_dir_name}'를 찾을 수 없습니다. 현재 디렉토리를 변경하지 않습니다.")
+                print(f"   (예상 경로: '{sam_project_path}')")
+
         except subprocess.CalledProcessError as e:
             print(f"❌ SAM 프로젝트 생성 실패: {e}")
         except Exception as e: # Catch other potential errors during the process
@@ -228,6 +251,8 @@ def create_sam_template(project_name="buggerking_remote_debugger", auto_mode=Tru
         try:
             subprocess.run(["sam", "init"], check=True)
             print("✅ SAM 프로젝트 수동 생성 완료")
+            print("ℹ️ 수동 모드에서는 SAM 프로젝트가 생성된 후, 해당 디렉토리로 직접 이동해주세요.")
+            print("   프로젝트 이름은 'sam init' 실행 시 직접 입력한 값입니다.")
         except subprocess.CalledProcessError as e:
             print(f"❌ SAM 인터랙티브 모드 실패: {e}")
 
@@ -243,19 +268,23 @@ def init():
         print("❌ 유효한 숫자를 입력해주세요.")
         return
 
-    # launch.json 생성
-    create_launch_json(port)
-    
-    # tasks.json 생성
-    create_tasks_json()
+    try:
+        # launch.json 생성
+        create_launch_json(port)
+        
+        # tasks.json 생성
+        create_tasks_json()
 
-    # 방화벽 규칙 추가
-    add_firewall_rule(port)
+        # 방화벽 규칙 추가
+        add_firewall_rule(port)
 
-    # sam init 실행 방식 선택
-    sam_mode = input("SAM 프로젝트를 자동 생성할까요? (Y/n): ").strip().lower()
-    auto_mode = sam_mode != 'n'
+        # sam init 실행 방식 선택
+        sam_mode = input("SAM 프로젝트를 자동 생성할까요? (Y/n): ").strip().lower()
+        auto_mode = sam_mode != 'n'
 
-    create_sam_template(auto_mode=auto_mode)
+        create_sam_template(auto_mode=auto_mode)
 
-    print("🎉 buggerking init 완료!")
+        print("🎉 buggerking init 완료!")
+
+    except Exception as e:
+        print(f"❌ buggerking 초기 설정 중 오류가 발생했습니다: {e}")
