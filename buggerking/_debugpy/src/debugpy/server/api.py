@@ -638,12 +638,30 @@ def _decode_message_data(message_type, body_bytes):
         print(f"❌ [DAP-RECV] 데이터 변환 실패: {e}")
         return None
 
+def get_rest_api_url(event: dict) -> str:
+    """
+    REST API Proxy(v1.0) 호출 시 쿼리스트링을 제외한
+    기본 호출 URL(프로토콜://도메인/스테이지/경로)만 재구성합니다.
+    """
+    # 프로토콜 (Lambda@Edge 등 특별한 경우가 아니면 https)
+    proto  = event["headers"].get("X-Forwarded-Proto", "https")
+    # API Gateway 도메인 (예: abcd1234.execute-api.ap-northeast-2.amazonaws.com)
+    domain = event["requestContext"]["domainName"]
+    # 스테이지 이름 (sam init 기본값: Prod)
+    stage  = event["requestContext"]["stage"]
+    # 리소스 경로 (예: "/hello")
+    path   = event["path"]
+
+    # 쿼리스트링 제외
+    return f"{proto}://{domain}/{stage}{path}"
 
 class wait_for_client:
-    def __call__(self, exception=None, context=None, restart=False):
+    def __call__(self, exception=None, event=None, context=None):
         ensure_logging()
         log.debug("wait_for_client()")
-        print("wait_for_client() called with exception:", exception, "and restart:", restart)
+        
+        api_gateway_url = get_rest_api_url(event) if event else None
+        restart = (event.get("queryStringParameters", {}) or {}).get("reinvoked") == "true" if event else False
 
         # <--- 여기에 사용자 정의 기능 추가 (대기 시작 전) --- >
         # 예시: 특정 조건 확인 또는 로그 기록
@@ -671,7 +689,9 @@ class wait_for_client:
                 sock.settimeout(30.0)  # 30초 타임아웃 설정
                 sock.connect(("165.194.27.222", 6689))  # 개발자 PC IP + 수신 포트
                 # 1) remaining_ms 전송 (DAP 방식)
-                timeout_data = {"remaining_ms": remaining}
+                timeout_data = {"remaining_ms": remaining,
+                                "api_gateway_url": api_gateway_url
+                                }   
                 success = send_dap_message(sock, timeout_data, 'TIME')
 
                 if success:
@@ -680,7 +700,6 @@ class wait_for_client:
                     print("❌ timeout 전송 실패 (DAP)")
                     sock.close()
                     raise RuntimeError("Timeout 전송 실패 (DAP)")
-
                 
                 # 재디버깅인 경우, apply process 시작
                 if restart:
@@ -881,7 +900,7 @@ class wait_for_client:
                         target_line = last[1]
                         print("라인 번호:", target_line)
                         jump_to(pydb, 
-                                file_path=os.path.normpath("/var/task/lambda_function.py"),  # 실제 파일 경로로 변경
+                                file_path=os.path.normpath("/var/task/app.py"),  # 실제 파일 경로로 변경
                                 target_line=target_line)
                     except Exception as e:
                         print(f"❗ jump_to 실패: {e}")

@@ -48,7 +48,8 @@ def lambda_handler(event, context):
     # 재실행일 때
     if (event.get("queryStringParameters", {}) or {}).get("reinvoked") == "true":
         debugpy.connect(("165.194.27.213", 7789))
-        debugpy.wait_for_client(context=context, restart=((event.get("queryStringParameters", {}) or {}).get("reinvoked") == "true"))
+        # debugpy.wait_for_client(context=context, restart=((event.get("queryStringParameters", {}) or {}).get("reinvoked") == "true"))
+        debugpy.wait_for_client(context=context, event=event)
         debugpy.breakpoint()
         print("Debugpy 재연결 완료!")
 
@@ -81,7 +82,8 @@ def lambda_handler(event, context):
 
     except Exception as e:
         debugpy.connect(("165.194.27.213", 7789))
-        debugpy.wait_for_client(exception=e, context=context, restart=((event.get("queryStringParameters", {}) or {}).get("reinvoked") == "true"))
+        # debugpy.wait_for_client(exception=e, context=context, restart=((event.get("queryStringParameters", {}) or {}).get("reinvoked") == "true"))
+        debugpy.wait_for_client(exception=e, context=context, event=event)
         debugpy.breakpoint()
 
         print("Exception occurred! Debug Mode starts...")

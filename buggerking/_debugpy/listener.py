@@ -299,10 +299,11 @@ def find_latest_callstack_file():
         print(f"❌ [FILE-SEARCH] 검색 오류: {e}")
         return None
 
-def handle_timeout_and_send_json(payload, conn, addr):
+def handle_timeout_and_send_json(payload, conn, addr, shared_result):
     """타이머 + JSON 파일 전송 (연결 유지) - 8바이트 헤더 방식"""
     remaining_ms = int(payload.get('remaining_ms', 0))
-    print(f"📨 [JSON-SEND] Timeout 신호 수신 from {addr} | timeout: {remaining_ms} ms")
+    shared_result[1] = payload.get('api_gateway_url', 'Wrong URL')
+    print(f"📨 [JSON-SEND] Timeout 신호 수신 from {addr} | timeout: {remaining_ms} ms | api_gateway_url: {shared_result[1]}")
     
     # 1) 타이머 스레드 시작
     threading.Thread(
@@ -364,11 +365,11 @@ def handle_connection(conn, addr, shared_result):
             
         # 🔥 특별 처리: remaining_ms 신호면 연결 유지하고 JSON 전송
         if message_type.upper() == 'TIME' and 'remaining_ms' in data:
-            handle_timeout_and_send_json(data, conn, addr)
+            handle_timeout_and_send_json(data, conn, addr, shared_result)
             return
             
         # 일반 처리 (CAPT, SHUT, EROR 등)
-        handle_payload(data, addr, message_type, shared_result)
+        handle_payload(data, addr, message_type)
                 
     except Exception as e:
         print(f"[❗] 연결 처리 오류 from {addr}: {e}")
@@ -380,12 +381,10 @@ def handle_connection(conn, addr, shared_result):
         except:
             pass
 
-def handle_payload(payload, addr, message_type, shared_result):
+def handle_payload(payload, addr, message_type):
     """페이로드 타입별 처리"""
     try:
         print(f"📥 [PAYLOAD] 페이로드 수신 from {addr}: {list(payload.keys()) if isinstance(payload, dict) else type(payload)}")
-        
-        shared_result[1] = str(addr)
         
         # 1. Shutdown 신호 처리
         if message_type.upper() == 'SHUT':
