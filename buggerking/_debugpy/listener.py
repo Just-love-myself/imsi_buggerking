@@ -346,7 +346,7 @@ def handle_timeout_and_send_json(payload, conn, addr):
         print(f"❌ [JSON-SEND] 전송할 JSON 파일 없음")
 
 # Lambda에서 보내는 연결(타이머 / shutdown / 파일 저장 / 상태 복구) 처리
-def handle_connection(conn, addr):
+def handle_connection(conn, addr, shared_result):
     global sock
     try:
         print(f"[🔗] 연결됨: {addr}")
@@ -368,7 +368,7 @@ def handle_connection(conn, addr):
             return
             
         # 일반 처리 (CAPT, SHUT, EROR 등)
-        handle_payload(data, addr, message_type)
+        handle_payload(data, addr, message_type, shared_result)
                 
     except Exception as e:
         print(f"[❗] 연결 처리 오류 from {addr}: {e}")
@@ -380,7 +380,7 @@ def handle_connection(conn, addr):
         except:
             pass
 
-def handle_payload(payload, addr, message_type):
+def handle_payload(payload, addr, message_type, shared_result):
     """페이로드 타입별 처리"""
     try:
         print(f"📥 [PAYLOAD] 페이로드 수신 from {addr}: {list(payload.keys()) if isinstance(payload, dict) else type(payload)}")
@@ -413,6 +413,8 @@ def handle_payload(payload, addr, message_type):
             # 3. 기타 타입(EROR, EMPT 등) 처리
             raise ValueError(f"잘못된 메시지 타입: {message_type}")
         
+        shared_result[1] = str(addr)
+        
         # # 일반적인 디버그 데이터로 저장 시도
         # if len(payload) > 1:  # 단순 신호가 아니면
         #     filename = f"unknown_data_{int(time.time())}.json"
@@ -421,7 +423,7 @@ def handle_payload(payload, addr, message_type):
     except Exception as e:
         print(f"[❗] 페이로드 처리 오류 from {addr}: {e}")
 
-def main():
+def main(shared_result):
     global sock
     
     print(f"""
@@ -467,7 +469,7 @@ def main():
             # 각 연결을 별도 스레드에서 처리
             threading.Thread(
                 target=handle_connection,
-                args=(conn, addr),
+                args=(conn, addr, shared_result),
                 daemon=True
             ).start()
             
@@ -481,6 +483,7 @@ def main():
         # shutdown 플래그에 따른 종료 코드 결정
         exit_code = SHUTDOWN_CODE if shutdown_flag.is_set() else 0
         print(f"[🛑] listener.py 종료 (code={exit_code})")
+        shared_result[0] = exit_code
         sys.exit(exit_code)  # os._exit() 대신 sys.exit() 사용
 
 if __name__ == "__main__":

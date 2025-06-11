@@ -8,11 +8,17 @@ import signal
 import os
 import requests
 from typing import Any, Tuple, cast
+from threading import Thread
+
+from .listener import main as listener_main
+
 
 LISTENER_SCRIPT = "listener.py"
 DEBUGPY_PORT    = 7789   # VSCode debug adapter listen 포트
 SHUTDOWN_CODE   = 123
 listener_proc   = None
+listener_thread = None
+func_result = [0, '']  # [exit_code, func gateway url]
 
 # debugpy 프로세스(자식) 정리; Pylance 경고 무시용 캐스트 포함
 def kill_debugpy():
@@ -34,6 +40,9 @@ def handle_sigint(signum, frame):
     print("\n[⚠️] Ctrl+C 감지—loop_controller 종료")
     if listener_proc and listener_proc.poll() is None:
         listener_proc.kill()
+    if listener_thread and listener_thread.is_alive():
+        listener_thread.terminate()
+    # debugpy 프로세스 정리
     kill_debugpy()
     os._exit(0)
 
@@ -41,7 +50,7 @@ signal.signal(signal.SIGINT, handle_sigint)
 
 # listener.py 프로세스 실행
 def start_listener():
-    global listener_proc
+    global listener_proc, listener_thread, func_gateway
     # 혹시 떠 있는 구 버전 listener.py 있으면 정리
     for proc in psutil.process_iter(['pid','cmdline']):
         try:
@@ -49,14 +58,19 @@ def start_listener():
                 proc.kill()
         except:
             pass
-    listener_proc = subprocess.Popen([sys.executable, LISTENER_SCRIPT])
-    return listener_proc
+    # listener_proc = subprocess.Popen([sys.executable, LISTENER_SCRIPT])
+    # return listener_proc
+    listener_thread = Thread(target=listener_main, args=(func_result,), daemon=True)
+    listener_thread.start()
+    return listener_thread
 
 # VSCode debug adapter(attach listen)가 포트 열릴 때까지 대기
 def wait_for_debugpy():
     print(f"[🕓] 디버거 포트({DEBUGPY_PORT}) 연결 대기 중...")
     while True:
         if listener_proc and listener_proc.poll() is not None:
+            return False
+        elif listener_thread and not listener_thread.is_alive():
             return False
         try:
             with socket.create_connection(("localhost", DEBUGPY_PORT), timeout=1):
@@ -80,7 +94,7 @@ def main():
     first_run = True                  # <-- 처음 플래그
     try:
         while True:
-            proc = start_listener()
+            listener_th = start_listener()
 
             # 1) VSCode debug adapter가 listen 중인지 확인
             if not wait_for_debugpy():
@@ -95,13 +109,13 @@ def main():
                 invoke_lambda()
 
             # 3) listener.py(타이머 서버) 종료 대기
-            exit_code = proc.wait()
-            print(f"[ℹ️] listener.py 종료 (code={exit_code})")
+            listener_th.join()
+            print(f"[ℹ️] listener.py 종료 (code={func_result[0]}, url={func_result[1]})")
 
             kill_debugpy()
 
             # 4) Lambda(어댑터)에서 보낸 shutdown 신호면 전체 종료
-            if exit_code == SHUTDOWN_CODE:
+            if func_result[0] == SHUTDOWN_CODE:
                 print("[✅] Shutdown signal 처리—전체 종료")
                 break
 
