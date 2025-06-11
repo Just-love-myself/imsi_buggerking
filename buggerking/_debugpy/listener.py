@@ -385,6 +385,8 @@ def handle_payload(payload, addr, message_type, shared_result):
     try:
         print(f"📥 [PAYLOAD] 페이로드 수신 from {addr}: {list(payload.keys()) if isinstance(payload, dict) else type(payload)}")
         
+        shared_result[1] = str(addr)
+        
         # 1. Shutdown 신호 처리
         if message_type.upper() == 'SHUT':
             print(f"🚨 Shutdown signal 수신 from {addr}")
@@ -413,7 +415,6 @@ def handle_payload(payload, addr, message_type, shared_result):
             # 3. 기타 타입(EROR, EMPT 등) 처리
             raise ValueError(f"잘못된 메시지 타입: {message_type}")
         
-        shared_result[1] = str(addr)
         
         # # 일반적인 디버그 데이터로 저장 시도
         # if len(payload) > 1:  # 단순 신호가 아니면

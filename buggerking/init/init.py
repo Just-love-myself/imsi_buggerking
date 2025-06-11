@@ -264,7 +264,7 @@ def create_sam_template(project_name="buggerking_remote_debugger", auto_mode=Tru
             requirements_file_path = Path.cwd() / project_name / "hello_world" / "requirements.txt"
             _add_package_to_requirements(requirements_file_path, "buggerking")
             
-            print(f"ℹ️ 터미널에서 다음 명령을 실행하여 디렉토리를 변경하세요: cd {sam_project_path}")
+            print(f"ℹ️ 터미널에서 다음 명령을 실행하여 디렉토리를 변경하세요: cd {project_name}")
 
         except subprocess.CalledProcessError as e:
             print(f"❌ SAM 프로젝트 생성 실패: {e}")
