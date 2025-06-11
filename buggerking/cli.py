@@ -9,6 +9,12 @@ def main():
 
     # buggerking init
     subparsers.add_parser('init', help='Initialize buggerking')
+    
+    # buggerking build
+    subparsers.add_parser('build', help='Build the project')
+    
+    # buggerking deploy
+    subparsers.add_parser('deploy', help='Deploy the project')
 
     args = parser.parse_args()
     
