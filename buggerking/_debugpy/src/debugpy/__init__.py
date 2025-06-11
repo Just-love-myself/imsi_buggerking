@@ -32,7 +32,7 @@ assert sys.version_info >= (3, 7), (
 
 # Actual definitions are in a separate file to work around parsing issues causing
 # SyntaxError on Python 2 and preventing the above version check from executing.
-from debugpy.public_api import *  # noqa
-from debugpy.public_api import __version__
+from .public_api import *  # noqa
+from .public_api import __version__
 
 del sys

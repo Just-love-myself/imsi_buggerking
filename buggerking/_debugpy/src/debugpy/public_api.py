@@ -7,7 +7,7 @@ from __future__ import annotations
 import functools
 import typing
 
-from debugpy import _version
+from . import _version
 
 
 # Expose debugpy.server API from subpackage, but do not actually import it unless
@@ -25,7 +25,7 @@ def _api(cancelable=False):
     def apply(f):
         @functools.wraps(f)
         def wrapper(*args, **kwargs):
-            from debugpy.server import api
+            from .server import api
 
             wrapped = getattr(api, f.__name__)
             return wrapped(*args, **kwargs)
@@ -33,7 +33,7 @@ def _api(cancelable=False):
         if cancelable:
 
             def cancel(*args, **kwargs):
-                from debugpy.server import api
+                from .server import api
 
                 wrapped = getattr(api, f.__name__)
                 return wrapped.cancel(*args, **kwargs)
