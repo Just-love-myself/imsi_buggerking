@@ -259,6 +259,7 @@ def create_sam_template(project_name="buggerking_remote_debugger", auto_mode=Tru
             subprocess.run([
                 sam_path,
                 "init",
+                "--name", project_name,
                 "--no-interactive",
                 "--runtime", "python3.13",
                 "--dependency-manager", "pip",
