@@ -151,7 +151,7 @@ def create_loop_controller():
     vscode_path = Path(".")
     vscode_path.mkdir(exist_ok=True)
 
-    loop_controller_content = f"""# loop_controller.py
+    loop_controller_content = """# loop_controller.py
 import subprocess
 import time
 import psutil
@@ -163,7 +163,7 @@ import requests
 from typing import Any, Tuple, cast
 from threading import Thread
 
-from .listener import main as listener_main
+from listener import main as listener_main
 
 
 LISTENER_SCRIPT = "listener.py"
@@ -190,7 +190,7 @@ def kill_debugpy():
                 pass
 
 def handle_sigint(signum, frame):
-    print("\n[⚠️] Ctrl+C 감지—loop_controller 종료")
+    print("\\n[⚠️] Ctrl+C 감지—loop_controller 종료")
     if listener_proc and listener_proc.poll() is None:
         listener_proc.kill()
     if listener_thread and listener_thread.is_alive():
@@ -293,7 +293,7 @@ def create_listener():
     vscode_path = Path(".")
     vscode_path.mkdir(exist_ok=True)
     
-    listener_content = f'''# listener.py - 8바이트 헤더 방식 적용된 완전한 버전
+    listener_content = '''# listener.py - 8바이트 헤더 방식 적용된 완전한 버전
 import socket
 import json
 import struct  # 추가: 8바이트 헤더 처리용
@@ -314,7 +314,7 @@ DEBUG_DATA_DIR = "debug_data"
 
 # Ctrl+C 핸들러: 수동 종료
 def handle_sigint(signum, frame):
-    print("\n[⚠️] Ctrl+C 감지—listener 종료")
+    print("\\n[⚠️] Ctrl+C 감지—listener 종료")
     if sock:
         try:
             sock.close()
@@ -769,7 +769,7 @@ def main(shared_result):
             ).start()
             
     except KeyboardInterrupt:
-        print("\n[⚠️] Ctrl+C로 인한 종료")
+        print("\\n[⚠️] Ctrl+C로 인한 종료")
     finally:
         if sock:
             sock.close()
@@ -943,10 +943,10 @@ def init():
         create_tasks_json()
         
         # loop_controller.py 파일 생성
-        # create_loop_controller()
+        create_loop_controller()
         
         # listener.py 파일 생성
-        # create_listener()
+        create_listener()
 
         # 방화벽 규칙 추가
         add_firewall_rule(port)
